@@ -1,161 +1,54 @@
-# 🌬️ BreathSafe
+# BreatheSafe
 
-**BreatheSafe** is a cross-platform Flutter mobile app paired with an ESP32 IoT device that monitors real-time air quality, humidity, and temperature. Get instant alerts when air quality drops below safe thresholds.
+BreatheSafe is a comprehensive Android application designed to monitor your local air quality using a custom Bluetooth Low Energy (BLE) sensor device. Built with a Flutter frontend and a robust native Kotlin background service, BreatheSafe ensures that you are constantly protected from poor air quality, even when the app is closed or your phone is locked.
 
-![Flutter](https://img.shields.io/badge/Flutter-3.10+-blue?logo=flutter)
-![Dart](https://img.shields.io/badge/Dart-3.10+-blue?logo=dart)
-![ESP32](https://img.shields.io/badge/ESP32-BLE-green)
-![License](https://img.shields.io/badge/License-MIT-green)
-![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20iOS%20%7C%20Linux%20%7C%20macOS-blue)
+## 🚀 Key Features
 
-## ✨ Features
+*   **Real-time Air Monitoring:** Tracks Air Purity (via MQ135 sensor), Temperature, and Humidity (via DHT22 sensor) by connecting to a custom ESP32/BLE hardware device.
+*   **Custom Health Profiles:** Automatically adjusts safety thresholds based on the user's age group and respiratory conditions (e.g., Asthma, Chronic Wheezing).
+*   **Persistent Background Connection:** A native Android background service (`BreathSafeBleService`) maintains the BLE connection reliably. If the app is swiped away, the background service continues monitoring without interruption.
+*   **Full-Screen Lock Screen Alarms:** When air conditions drop to dangerous levels, BreatheSafe triggers a high-priority, full-screen alert that forcefully wakes up the screen and bypasses the lock screen (`FLAG_SHOW_WHEN_LOCKED`, `FLAG_TURN_SCREEN_ON`).
+*   **Continuous Siren with Audio Focus:** The alarm uses Android's `MediaPlayer` to play a continuous looping siren, requesting Audio Focus to duck other media until you explicitly snooze or dismiss the alert.
+*   **Instant UI Re-sync:** Re-opening the app instantly re-syncs the UI state with the background service's connection using `SharedPreferences`, avoiding unnecessary reconnections.
 
-- 🔵 **Real-Time BLE Monitoring** — Live air quality metrics from ESP32 sensor node
-- 🌡️ **Environmental Tracking** — Temperature & humidity readings via DHT22 sensor
-- 💨 **Air Quality Metrics** — Air purity, PM2.5, CO2, and VOC estimates
-- 🔔 **Smart Alerts** — Background notifications when air quality drops
-- 👤 **User Profiles** — Personalized settings and preferences
-- 📊 **Data Visualization** — Sparkline charts and air purity rings for easy interpretation
-- 🖥️ **Cross-Platform** — Native support for Android, iOS, Linux, and macOS
-- 🎮 **Demo Mode** — Built-in simulator for UI testing without ESP32 hardware
-- ⚙️ **Settings Management** — Scan for devices, configure thresholds, manage preferences
+## 📱 Tech Stack
 
-## 🏗️ System Architecture
+*   **Frontend:** [Flutter](https://flutter.dev/) (Dart)
+*   **Backend / System Services:** Native Android (Kotlin)
+*   **Communication:** Flutter MethodChannels & BLE (Bluetooth Low Energy)
+*   **State Management:** SharedPreferences & Native Android Intents
 
-```
-┌─────────────────────────────────────────┐
-│        Flutter App (Mobile/Desktop)     │
-│  ┌─────────────────────────────────┐    │
-│  │  Home Screen                    │    │
-│  │  - Air Quality Dashboard        │    │
-│  │  - Real-time metrics & charts   │    │
-│  └─────────────────────────────────┘    │
-│  ┌─────────────────────────────────┐    │
-│  │  Settings Screen                │    │
-│  │  - Device scan & connection     │    │
-│  │  - Threshold configuration      │    │
-│  └─────────────────────────────────┘    │
-│  ┌─────────────────────────────────┐    │
-│  │  Services Layer                 │    │
-│  │  - BleSensorService (BLE)       │    │
-│  │  - ProfileService (user data)   │    │
-│  │  - BackgroundAlertService       │    │
-│  └─────────────────────────────────┘    │
-└─────────────────────────────────────────┘
-              ↕ (BLE)
-┌─────────────────────────────────────────┐
-│         ESP32 Sensor Node               │
-│  ┌─────────────────────────────────┐    │
-│  │  Sensor Inputs                  │    │
-│  │  - DHT22 (Temp/Humidity)        │    │
-│  │  - MQ135 (Air Quality)          │    │
-│  └─────────────────────────────────┘    │
-│  ┌─────────────────────────────────┐    │
-│  │  BLE Server                     │    │
-│  │  - Broadcasts data every 2s     │    │
-│  └─────────────────────────────────┘    │
-└─────────────────────────────────────────┘
-```
+## 🛠️ Hardware Requirements
 
-## 📦 Requirements
+BreatheSafe is designed to pair with a custom BLE peripheral (like an ESP32) advertising the following specifications:
+*   **Service UUID:** `4fafc201-1fb5-459e-8fcc-c5c9c331914b`
+*   **Characteristic UUID:** `beb5483e-36e1-4688-b7f5-ea07361b26a8`
+*   **Payload Format:** `MQ135_RAW,DHT_VALID,HUMIDITY,TEMPERATURE` (e.g., `1250,1,45.5,22.3`)
 
-### Mobile/Desktop App
-- **Flutter**: 3.10.3 or higher
-- **Dart**: 3.10+ SDK
-- **BLE Capable Device** (Bluetooth 4.0+)
+## ⚙️ Installation & Setup
 
-### ESP32 Hardware
-- **Microcontroller**: ESP32 (BLE support)
-- **Temperature/Humidity**: DHT22 (AM2302)
-- **Air Quality**: MQ135 sensor
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/mrilaikram/BreatheSafe.git
+    cd BreatheSafe
+    ```
+2.  **Install Flutter dependencies:**
+    ```bash
+    flutter pub get
+    ```
+3.  **Build the Release APK:**
+    ```bash
+    flutter build apk --release
+    ```
+    *Note: APK size reduction (ProGuard/R8) has been manually tuned to prioritize background service stability.*
 
-## 🚀 Quick Start
+## 🔒 Permissions Required
 
-### Mobile Device (Android/iOS)
+To function properly, the app requests the following Android permissions:
+*   `BLUETOOTH_SCAN` & `BLUETOOTH_CONNECT` (For discovering and connecting to the sensor)
+*   `ACCESS_FINE_LOCATION` (Required by Android for BLE scanning)
+*   `POST_NOTIFICATIONS` (For the ongoing background monitor and alarms)
+*   `USE_FULL_SCREEN_INTENT` (To wake the screen during critical alerts)
 
-1. **Clone & Setup**
-   ```bash
-   git clone https://github.com/ilaikram/Breathsafe.git
-   cd Breathsafe
-   flutter pub get
-   ```
-
-2. **Flash ESP32 Firmware**
-   - Open `esp32_firmware/esp32_firmware.ino` in Arduino IDE
-   - Install DHT library: Sketch → Include Library → Manage Libraries → Search "DHT sensor library"
-   - Select Tools → Board: "ESP32 Dev Module"
-   - Upload to your ESP32
-
-3. **Run App**
-   ```bash
-   flutter run
-   ```
-
-4. **Connect Device**
-   - Settings → Scan for Devices → Select "BreatheSafe_Device"
-   - Return to Home to view live data
-
-### Linux Desktop (Demo Mode)
-
-```bash
-flutter run -d linux
-```
-
-No ESP32 required — uses simulated data to test UI.
-
-## 📡 BLE Communication
-
-**Payload Format**:
-```
-airPurity,humidity,temperature,mq135Raw,dhtValid
-Example: 75,55.2,23.5,1250,1
-```
-
-**Service UUID**: `4fafc201-1fb5-459e-8fcc-c5c9c331914b`  
-**Characteristic UUID**: `beb5483e-36e1-4688-b7f5-ea07361b26a8`
-
-## 📚 Documentation
-
-- **[INSTALLATION.md](INSTALLATION.md)** — Detailed setup for all platforms
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** — Technical system design
-- **[CONTRIBUTING.md](CONTRIBUTING.md)** — How to contribute
-
-## 🧪 Testing & Validation
-
-```bash
-# Analyze code
-flutter analyze
-
-# Run tests
-flutter test
-
-# Build release APK
-flutter build apk --release
-```
-
-## 🐛 Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| Android: Bluetooth not working | Grant runtime permissions in app settings |
-| iOS: Permission Handler error | Update iOS deployment target to 13.0+ |
-| ESP32: Not in device list | Ensure powered on, correct firmware flashed, location permission granted on Android |
-| MQ135 reads high | Wait 20+ minutes for sensor warm-up |
-
-See [INSTALLATION.md](INSTALLATION.md) for detailed troubleshooting.
-
-## 📄 License
-
-MIT License — see [LICENSE.md](LICENSE.md)
-
-## 🤝 Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on:
-- Code style
-- Development setup
-- Pull request process
-- Testing requirements
-
----
-
-**Built with ❤️ using Flutter & ESP32** 🌬️✨
+## 👤 Author
+Developed by **[mrilaikram](https://github.com/mrilaikram)**.
