@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Monochrome shield icon for status bar notification. Android ignores color on
+     notification icons; only the alpha channel matters, so this is white-filled. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Shield outline -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M12,1L3,5v6c0,5.55 3.84,10.74 9,12 5.16,-1.26 9,-6.45 9,-12L21,5 12,1z
+                         M12,11.99h7c-0.53,4.12 -3.28,7.79 -7,8.94L12,11.99z
+                         M5,11.99h7L12,4.06 5,7.18v4.81z" />
+</vector>
