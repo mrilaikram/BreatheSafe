@@ -20,10 +20,31 @@ BreatheSafe is a comprehensive Android application designed to monitor your loca
 
 ## 🛠️ Hardware Requirements
 
-BreatheSafe is designed to pair with a custom BLE peripheral (like an ESP32) advertising the following specifications:
+BreatheSafe is designed to pair with a custom BLE peripheral (ESP32) with two sensors:
+
+| Component | Purpose | Key Pins |
+|---|---|---|
+| **Sharp GP2Y1010AU0F** | Optical Dust Sensor (PM2.5 µg/m³) | GPIO 2 (LED), GPIO 34 (Analog) |
+| **DHT22** | Temperature & Humidity | GPIO 4 (Data) |
+
 *   **Service UUID:** `4fafc201-1fb5-459e-8fcc-c5c9c331914b`
 *   **Characteristic UUID:** `beb5483e-36e1-4688-b7f5-ea07361b26a8`
-*   **Payload Format:** `Sharp GP2Y1010AU0F_RAW,DHT_VALID,HUMIDITY,TEMPERATURE` (e.g., `1250,1,45.5,22.3`)
+*   **Payload Format:** `dustDensity,humidity,temperature,dhtValid` (e.g., `12.5,55.3,24.7,1`)
+
+## 🔌 Wiring Diagram
+
+![BreatheSafe Wiring Diagram](wiring_diagram.png)
+
+> 📖 **Full connection guide with step-by-step instructions:** [HARDWARE_CONNECTIONS.md](HARDWARE_CONNECTIONS.md)
+
+**Quick summary:**
+- `ESP32 5V → [150Ω] → Sharp Pin 1 (V-LED)` + `220µF cap to GND`
+- `ESP32 5V → Sharp Pin 6 (Vcc)`
+- `ESP32 GND → Sharp Pin 2 (LED-GND) & Pin 4 (S-GND)`
+- `ESP32 GPIO 2 → Sharp Pin 3 (LED)` ← IR LED control
+- `ESP32 GPIO 34 → Sharp Pin 5 (Vo)` ← Analog dust reading
+- `ESP32 3.3V → DHT22 VCC` (with 10kΩ pull-up on data)
+- `ESP32 GPIO 4 → DHT22 DATA`
 
 ## ⚙️ Installation & Setup
 
