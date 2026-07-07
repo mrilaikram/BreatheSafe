@@ -2,11 +2,7 @@
 
 This guide explains exactly how to wire up the **BreatheSafe ESP32 hardware** with the **Sharp GP2Y1010AU0F** optical dust sensor and **DHT22** temperature/humidity sensor.
 
----
-
-## 📸 Wiring Diagram
-
-![BreatheSafe Wiring Diagram](wiring_diagram.png)
+> **Tested Board:** ESP32-WROOM-32 Dev Module (30-pin). The pin label names in this guide (D2, D4, D34, VIN, 3V3, GND) match exactly what is printed on this board.
 
 ---
 
@@ -30,14 +26,14 @@ This guide explains exactly how to wire up the **BreatheSafe ESP32 hardware** wi
 
 The Sharp sensor has **6 pins** (numbered 1 to 6 on the connector). Wire them as follows:
 
-| Sharp Pin | Pin Label | ESP32 Connection | Wire Color | Notes |
+| Sharp Pin | Pin Label | Board Pin Label | Wire Color | Notes |
 |:---:|---|---|---|---|
-| **1** | V-LED | **5V** (via 150Ω resistor) | 🔴 Red | Series 150Ω resistor required. Add 220µF cap between this pin and GND |
+| **1** | V-LED | **VIN** (via 150Ω resistor) | 🔴 Red | Series 150Ω resistor required. Add 220µF cap between this pin and GND |
 | **2** | LED-GND | **GND** | ⚫ Black | Ground for internal IR LED |
-| **3** | LED | **GPIO 2** | 🟢 Green | Digital control pin — turns IR LED on/off during measurement |
+| **3** | LED | **D2** | 🟢 Green | Digital control — turns IR LED on/off during measurement |
 | **4** | S-GND | **GND** | ⚫ Black | Ground for signal/output circuit |
-| **5** | Vo | **GPIO 34** | 🟡 Yellow | Analog output — connect to ADC input pin |
-| **6** | Vcc | **5V** | 🔴 Red | Main power for sensor |
+| **5** | Vo | **D34** | 🟡 Yellow | Analog output — D34 is input-only ADC pin, perfect for this |
+| **6** | Vcc | **VIN** | 🔴 Red | Main 5V power for sensor |
 
 > **⚠️ IMPORTANT — The 150Ω Resistor + 220µF Capacitor:**
 > These are **not optional**. The Sharp sensor's internal IR LED pulses at high current. Without the resistor and capacitor:
@@ -53,10 +49,10 @@ The Sharp sensor has **6 pins** (numbered 1 to 6 on the connector). Wire them as
 
 The DHT22 has **4 pins** (numbered 1 to 4 from left to right when facing the sensor grid):
 
-| DHT22 Pin | Pin Label | ESP32 Connection | Wire Color | Notes |
+| DHT22 Pin | Pin Label | Board Pin Label | Wire Color | Notes |
 |:---:|---|---|---|---|
-| **1** | VCC | **3.3V** | 🟣 Purple | Do not use 5V — will damage the sensor |
-| **2** | DATA | **GPIO 4** | 🔵 Blue | Add a 10kΩ pull-up resistor between DATA and 3.3V |
+| **1** | VCC | **3V3** | 🟣 Purple | Use 3V3 pin (NOT VIN/5V) — 5V will damage the sensor |
+| **2** | DATA | **D4** | 🔵 Blue | Add a 10kΩ pull-up resistor between DATA and 3V3 |
 | **3** | NC | Not connected | — | Leave this pin floating |
 | **4** | GND | **GND** | ⚫ Black | Ground |
 
@@ -67,20 +63,20 @@ The DHT22 has **4 pins** (numbered 1 to 4 from left to right when facing the sen
 ## 📋 Full Pinout Summary
 
 ```
-ESP32 Dev Board
+ESP32-WROOM-32 Dev Board (use these exact labels printed on the board)
 │
-├── 5V  ──── [150Ω] ──── Sharp Pin 1 (V-LED)
+├── VIN ──── [150Ω] ──── Sharp Pin 1 (V-LED)
 │                  └── [220µF cap to GND]
-├── 5V  ──────────────── Sharp Pin 6 (Vcc)
+├── VIN ──────────────── Sharp Pin 6 (Vcc)
 ├── GND ──────────────── Sharp Pin 2 (LED-GND)
 ├── GND ──────────────── Sharp Pin 4 (S-GND)
-├── GPIO 2 ───────────── Sharp Pin 3 (LED) ← IR LED control
-├── GPIO 34 ──────────── Sharp Pin 5 (Vo) ← Analog dust reading
+├── D2  ───────────────── Sharp Pin 3 (LED) ← IR LED control
+├── D34 ───────────────── Sharp Pin 5 (Vo) ← Analog dust reading
 │
-├── 3.3V ─────────────── DHT22 Pin 1 (VCC)
-├── 3.3V ──── [10kΩ] ─── DHT22 Pin 2 (DATA) ← pull-up
-├── GPIO 4 ───────────── DHT22 Pin 2 (DATA) ← data line
-└── GND  ─────────────── DHT22 Pin 4 (GND)
+├── 3V3 ───────────────── DHT22 Pin 1 (VCC)
+├── 3V3 ──── [10kΩ] ──── DHT22 Pin 2 (DATA) ← pull-up resistor
+├── D4  ───────────────── DHT22 Pin 2 (DATA) ← data line
+└── GND ───────────────── DHT22 Pin 4 (GND)
 ```
 
 ---
@@ -92,11 +88,11 @@ The Sharp GP2Y1010AU0F is an **optical particle sensor**, not a gas sensor. Insi
 - A **phototransistor** that detects light scattered by dust particles
 
 The ESP32 firmware controls this timing precisely:
-1. Pull `GPIO 2` LOW → IR LED turns ON
+1. Pull **D2** LOW → IR LED turns ON
 2. Wait **280 µs** → sensor output settles
-3. Read analog value from `GPIO 34` → this is the dust reading
+3. Read analog value from **D34** → this is the dust reading
 4. Wait **40 µs** more
-5. Pull `GPIO 2` HIGH → IR LED turns OFF
+5. Pull **D2** HIGH → IR LED turns OFF
 6. Wait **9680 µs** (rest of the 10ms cycle)
 
 The raw analog reading (0–4095 on 12-bit ADC) is converted to a voltage, then to **dust density in µg/m³** using this formula:
