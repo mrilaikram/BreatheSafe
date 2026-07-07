@@ -10,7 +10,7 @@
 ## 📋 Quick Summary
 
 BreatheSafe is an **air quality monitoring mobile application** that connects to a custom **ESP32-based BLE sensor device** to continuously monitor environmental conditions. The app tracks:
-- **Air Purity** (using MQ135 gas sensor)
+- **Dust Density** (using Sharp GP2Y1010AU0F gas sensor)
 - **Temperature** (using DHT22 sensor)
 - **Humidity** (using DHT22 sensor)
 
@@ -58,8 +58,8 @@ The app adapts safety thresholds based on **user health profiles** (age group + 
 │  │  - DHT22 (GPIO 4)                │  │
 │  │    ├─ Temperature (-40 to 125°C) │  │
 │  │    └─ Humidity (0–100%)          │  │
-│  │  - MQ135 (GPIO 34 ADC)           │  │
-│  │    └─ Air Purity (0–4095 raw)    │  │
+│  │  - Sharp GP2Y1010AU0F (GPIO 34 ADC)           │  │
+│  │    └─ Dust Density (0–4095 raw)    │  │
 │  └──────────────────────────────────┘  │
 │              ↓                          │
 │  ┌──────────────────────────────────┐  │
@@ -146,7 +146,7 @@ Example: "1250,1,45.5,22.3"
          │    │ │     └─ Temperature (°C)
          │    │ └─ Humidity (%)
          │    └─ DHT Valid (1=valid checksum)
-         └─ MQ135 Raw ADC (0–4095)
+         └─ Sharp GP2Y1010AU0F Raw ADC (0–4095)
 ```
 
 **Flutter Processing:**
@@ -154,7 +154,7 @@ Example: "1250,1,45.5,22.3"
 1. Split by comma: ["1250", "1", "45.5", "22.3"]
 2. Parse to numeric types
 3. Calculate estimated PM2.5:
-   PM2.5 ≈ (mq135_raw / 4095) × 500 µg/m³
+   PM2.5 ≈ (sharp_raw / 4095) × 500 µg/m³
 4. Calculate estimated CO2:
    CO2 ≈ (air_purity / 100) × 5000 ppm
 5. Calculate estimated VOC:
@@ -199,7 +199,7 @@ DHT22 Sensor:
 ├─ 3.3V    → Power
 └─ GND     → Ground
 
-MQ135 Sensor:
+Sharp GP2Y1010AU0F Sensor:
 ├─ GPIO 34 (ADC1_CH6) → Analog Output
 ├─ 5V      → Power
 └─ GND     → Ground
@@ -222,7 +222,7 @@ Max Range:          ~50 meters (open space)
 - Accuracy: ±2°C, ±2%
 - Sample Rate: ~0.5 Hz
 
-**MQ135 (Air Quality)**
+**Sharp GP2Y1010AU0F (Air Quality)**
 - Detects: CO2, CO, NH3, NOx, Smoke, Alcohol, Benzene, etc.
 - Output: 0–4095 (10-bit ADC)
 - Warm-up Time: ~20 seconds
@@ -244,7 +244,7 @@ OnboardingScreen (Profile Setup)
     ↓
 MainShell (_MainShell widget)
 ├─ HomeScreen (Primary view)
-│  ├─ Air Purity Ring (animated visualization)
+│  ├─ Dust Density Ring (animated visualization)
 │  ├─ Temperature & Humidity displays
 │  ├─ BLE Connection Status
 │  └─ Scan/Connect buttons
@@ -508,7 +508,7 @@ Before the competition, verify:
 > Real-world users don't keep apps open all the time. Our background service (native Android) keeps the BLE connection alive even if the app is swiped away. This ensures you get alarms even while doing other tasks.
 
 ### "How accurate is the air purity reading?"
-> The MQ135 sensor has a ±5% accuracy range for CO2 detection. We estimate particulate matter (PM2.5) using a polynomial calibration model. For clinical accuracy, you'd need a certified multi-gas analyzer.
+> The Sharp GP2Y1010AU0F sensor has a ±5% accuracy range for CO2 detection. We estimate particulate matter (PM2.5) using a polynomial calibration model. For clinical accuracy, you'd need a certified multi-gas analyzer.
 
 ### "What's the maximum BLE range?"
 > Bluetooth Low Energy has a theoretical range of ~240 meters, but practical range is ~50 meters in open space. Walls reduce it significantly (10–30 meters indoors).
@@ -604,7 +604,7 @@ BreathSafe/
 - Handle `PermissionStatus.limited` (some permissions may be limited)
 
 ### 5. **Sensor Calibration**
-- MQ135 requires 24-hour warm-up for accurate readings
+- Sharp GP2Y1010AU0F requires 24-hour warm-up for accurate readings
 - Temperature sensor (DHT22) can drift; implement offset correction if needed
 - Humidity sensor is accurate but sensitive to dust—keep sensor clean
 

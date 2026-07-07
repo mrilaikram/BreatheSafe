@@ -34,7 +34,7 @@ BreathSafe is a client-server architecture where:
 ├──────────────────────────────────────┤
 │ Sensor Layer                         │
 │ ├─ DHT22 (GPIO 4)                    │
-│ └─ MQ135 (GPIO 34 ADC)               │
+│ └─ Sharp GP2Y1010AU0F (GPIO 34 ADC)               │
 ├──────────────────────────────────────┤
 │ Communication Layer                  │
 │ └─ BLE Server (Gatt Notifications)   │
@@ -74,7 +74,7 @@ Stream<bool> scanStateStream
 **Data Models**:
 ```dart
 class SensorData {
-  final double airPurity;          // 0-100%
+  final double dustDensity;          // 0-100%
   final double humidity;           // 0-100%
   final double temperature;        // -40 to 125°C
   final double pm25;               // Estimated µg/m³
@@ -82,7 +82,7 @@ class SensorData {
   final double voc;                // Estimated ppb
   final DateTime timestamp;        // When data was received
   final bool isSimulated;          // True in demo mode
-  final int? mq135Raw;             // Raw ADC 0-4095
+  final int? sharpRaw;             // Raw ADC 0-4095
   final bool dhtValid;             // DHT checksum valid
 }
 
@@ -99,15 +99,15 @@ class BleScanDevice {
 ```
 Incoming BLE notification: "75,55.2,23.5,1250,1"
                             │   │     │    │    └─ dhtValid (1=true)
-                            │   │     │    └─ mq135Raw (0-4095)
+                            │   │     │    └─ sharpRaw (0-4095)
                             │   │     └─ temperature (°C)
                             │   └─ humidity (%)
-                            └─ airPurity (%)
+                            └─ dustDensity (%)
 
 Processing:
 1. Split by comma → [75, 55.2, 23.5, 1250, 1]
 2. Parse to doubles & ints
-3. Calculate estimated PM2.5, CO2, VOC from airPurity
+3. Calculate estimated PM2.5, CO2, VOC from dustDensity
 4. Create SensorData object
 5. Emit to sensorStream
 6. Check BackgroundAlertService thresholds
@@ -167,11 +167,11 @@ class UserProfile {
 
 **Alert Logic**:
 ```
-if (sensorData.airPurity < UserProfile.alertThreshold) {
+if (sensorData.dustDensity < UserProfile.alertThreshold) {
     if (lastAlertTime < now - 5 minutes) {  // Prevent spam
         sendNotification(
             title: "🚨 Air Quality Alert",
-            body: "Air purity dropped to ${sensorData.airPurity}%"
+            body: "Air purity dropped to ${sensorData.dustDensity}%"
         )
         lastAlertTime = now
     }
@@ -262,7 +262,7 @@ if (sensorData.airPurity < UserProfile.alertThreshold) {
       └─ HomeScreen rebuilds with new data
 
 4. BackgroundAlertService checks threshold
-   └─ if (airPurity < threshold)
+   └─ if (dustDensity < threshold)
       └─ sendNotification() (local push)
 ```
 
@@ -325,13 +325,13 @@ beb5483e-36e1-4688-b7f5-ea07361b26a8
 
 **New Format (5 fields)** — Recommended
 ```
-airPurity,humidity,temperature,mq135Raw,dhtValid
+dustDensity,humidity,temperature,sharpRaw,dhtValid
 Example: 75,55.2,23.5,1250,1
 ```
 
 **Legacy Format (3 fields)** — Still supported
 ```
-airPurity,humidity,temperature
+dustDensity,humidity,temperature
 Example: 75,55.2,23.5
 ```
 

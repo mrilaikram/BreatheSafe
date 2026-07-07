@@ -4,7 +4,7 @@ BreatheSafe is a comprehensive Android application designed to monitor your loca
 
 ## 🚀 Key Features
 
-*   **Real-time Air Monitoring:** Tracks Air Purity (via MQ135 sensor), Temperature, and Humidity (via DHT22 sensor) by connecting to a custom ESP32/BLE hardware device.
+*   **Real-time Air Monitoring:** Tracks Dust Density (via Sharp GP2Y1010AU0F sensor), Temperature, and Humidity (via DHT22 sensor) by connecting to a custom ESP32/BLE hardware device.
 *   **Custom Health Profiles:** Automatically adjusts safety thresholds based on the user's age group and respiratory conditions (e.g., Asthma, Chronic Wheezing).
 *   **Persistent Background Connection:** A native Android background service (`BreathSafeBleService`) maintains the BLE connection reliably. If the app is swiped away, the background service continues monitoring without interruption.
 *   **Full-Screen Lock Screen Alarms:** When air conditions drop to dangerous levels, BreatheSafe triggers a high-priority, full-screen alert that forcefully wakes up the screen and bypasses the lock screen (`FLAG_SHOW_WHEN_LOCKED`, `FLAG_TURN_SCREEN_ON`).
@@ -23,7 +23,7 @@ BreatheSafe is a comprehensive Android application designed to monitor your loca
 BreatheSafe is designed to pair with a custom BLE peripheral (like an ESP32) advertising the following specifications:
 *   **Service UUID:** `4fafc201-1fb5-459e-8fcc-c5c9c331914b`
 *   **Characteristic UUID:** `beb5483e-36e1-4688-b7f5-ea07361b26a8`
-*   **Payload Format:** `MQ135_RAW,DHT_VALID,HUMIDITY,TEMPERATURE` (e.g., `1250,1,45.5,22.3`)
+*   **Payload Format:** `Sharp GP2Y1010AU0F_RAW,DHT_VALID,HUMIDITY,TEMPERATURE` (e.g., `1250,1,45.5,22.3`)
 
 ## ⚙️ Installation & Setup
 

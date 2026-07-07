@@ -50,11 +50,11 @@ Follow [Dart Style Guide](https://dart.dev/guides/language/effective-dart):
 class AirQualityWidget extends StatefulWidget {
   const AirQualityWidget({
     Key? key,
-    required this.airPurity,
+    required this.dustDensity,
     this.onTap,
   }) : super(key: key);
 
-  final double airPurity;
+  final double dustDensity;
   final VoidCallback? onTap;
 
   @override
@@ -63,8 +63,8 @@ class AirQualityWidget extends StatefulWidget {
 
 // ❌ Bad
 class AirQualityWidget extends StatefulWidget {
-  AirQualityWidget(this.airPurity, this.onTap);
-  double airPurity;
+  AirQualityWidget(this.dustDensity, this.onTap);
+  double dustDensity;
   VoidCallback onTap;
 
   @override
@@ -78,7 +78,7 @@ class AirQualityWidget extends StatefulWidget {
 |------|-----------|---------|
 | Class | `UpperCamelCase` | `BleSensorService` |
 | Method | `lowerCamelCase` | `connectToDevice()` |
-| Variable | `lowerCamelCase` | `airPurity`, `_privateVar` |
+| Variable | `lowerCamelCase` | `dustDensity`, `_privateVar` |
 | Constant | `lowerCamelCase` | `const maxRetries = 3` |
 | File | `snake_case` | `ble_sensor_service.dart` |
 | Widget | `UpperCamelCase` | `AirPurityRing` |
@@ -313,10 +313,10 @@ void main() {
       final payload = "75,55.2,23.5,1250,1";
       final data = service.parseSensorPayload(payload);
 
-      expect(data.airPurity, 75);
+      expect(data.dustDensity, 75);
       expect(data.humidity, 55.2);
       expect(data.temperature, 23.5);
-      expect(data.mq135Raw, 1250);
+      expect(data.sharpRaw, 1250);
       expect(data.dhtValid, true);
     });
 
@@ -324,10 +324,10 @@ void main() {
       final payload = "75,55.2,23.5";
       final data = service.parseSensorPayload(payload);
 
-      expect(data.airPurity, 75);
+      expect(data.dustDensity, 75);
       expect(data.humidity, 55.2);
       expect(data.temperature, 23.5);
-      expect(data.mq135Raw, isNull);
+      expect(data.sharpRaw, isNull);
       expect(data.dhtValid, isTrue);
     });
 

@@ -197,7 +197,7 @@ flutter run -d chrome
   - ESP32 development board (ESP32-WROOM recommended)
   - Micro-USB cable for programming
   - DHT22 sensor with 10kΩ pull-up resistor
-  - MQ135 air quality sensor
+  - Sharp GP2Y1010AU0F air quality sensor
   - Breadboard and jumper wires
 
 - **Software**:
@@ -242,11 +242,11 @@ ESP32 PINOUT (Pin names on development board)
 ┌─────────────────────────────────────────┐
 │ ESP32 Dev Module                        │
 │                                         │
-│  GND ─────────────────────────── GND    │  (Connect MQ135 GND & DHT22 GND)
+│  GND ─────────────────────────── GND    │  (Connect Sharp GP2Y1010AU0F GND & DHT22 GND)
 │  3V3 ─────────────────────────── 3V3    │  (Connect DHT22 VCC)
-│  5V  ─────────────────────────── 5V     │  (Connect MQ135 VCC)
+│  5V  ─────────────────────────── 5V     │  (Connect Sharp GP2Y1010AU0F VCC)
 │  D4  ──→ (GPIO 4)  DHT22 DATA LINE      │
-│  D34 ──→ (GPIO 34) MQ135 ANALOG OUTPUT   │
+│  D34 ──→ (GPIO 34) Sharp GP2Y1010AU0F ANALOG OUTPUT   │
 │                                         │
 └─────────────────────────────────────────┘
 
@@ -256,7 +256,7 @@ DHT22 WIRING:
 ├─ Pin 3 (NC)   → Not connected
 └─ Pin 4 (GND)  → ESP32 GND
 
-MQ135 WIRING:
+Sharp GP2Y1010AU0F WIRING:
 ├─ VCC → ESP32 5V
 ├─ GND → ESP32 GND
 ├─ A0  → ESP32 GPIO 34 (ADC)
@@ -302,7 +302,7 @@ RESISTOR:
    [BLE] Characteristic created
    [BLE] Start advertising
    [DHT] Temperature: 23.5°C, Humidity: 55%
-   [MQ135] Purity: 75%
+   [Sharp GP2Y1010AU0F] Dust Density: 75%
    ```
 
 ## 🌍 Platform-Specific Notes
@@ -423,7 +423,7 @@ pip install pyserial
 3. Update esp32_firmware.ino: `#define DHTPIN 5`
 4. Re-upload firmware
 
-### ESP32: MQ135 always reads high
+### ESP32: Sharp GP2Y1010AU0F always reads high
 1. Wait 20+ minutes after power-on for sensor warm-up
 2. Verify analog pin is GPIO 34, not GPIO 35 or 32
 3. Check for proper grounding
