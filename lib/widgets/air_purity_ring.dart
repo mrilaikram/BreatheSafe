@@ -3,12 +3,12 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
 class AirPurityRing extends StatefulWidget {
-  final double percentage;
+  final double dustDensity;
   final double size;
 
   const AirPurityRing({
     super.key,
-    required this.percentage,
+    required this.dustDensity,
     this.size = 240,
   });
 
@@ -21,7 +21,7 @@ class _AirPurityRingState extends State<AirPurityRing>
   late AnimationController _waveController;
   late AnimationController _ringController;
   late Animation<double> _ringAnimation;
-  double _previousPercentage = 0;
+  double _previousValue = 0;
 
   @override
   void initState() {
@@ -36,10 +36,10 @@ class _AirPurityRingState extends State<AirPurityRing>
       duration: const Duration(milliseconds: 1200),
     );
 
-    _previousPercentage = widget.percentage;
+    _previousValue = widget.dustDensity;
     _ringAnimation = Tween<double>(
       begin: 0,
-      end: widget.percentage,
+      end: widget.dustDensity,
     ).animate(CurvedAnimation(
       parent: _ringController,
       curve: Curves.easeInOut,
@@ -51,11 +51,11 @@ class _AirPurityRingState extends State<AirPurityRing>
   @override
   void didUpdateWidget(AirPurityRing oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.percentage != widget.percentage) {
-      _previousPercentage = oldWidget.percentage;
+    if (oldWidget.dustDensity != widget.dustDensity) {
+      _previousValue = oldWidget.dustDensity;
       _ringAnimation = Tween<double>(
-        begin: _previousPercentage,
-        end: widget.percentage,
+        begin: _previousValue,
+        end: widget.dustDensity,
       ).animate(CurvedAnimation(
         parent: _ringController,
         curve: Curves.easeInOut,
@@ -71,16 +71,16 @@ class _AirPurityRingState extends State<AirPurityRing>
     super.dispose();
   }
 
-  Color _getStatusColor(double pct) {
-    if (pct >= 75) return AppColors.primaryGreen;
-    if (pct >= 50) return AppColors.moderateYellow;
+  Color _getStatusColor(double dust) {
+    if (dust <= 35.0) return AppColors.primaryGreen;
+    if (dust <= 55.0) return AppColors.moderateYellow;
     return AppColors.dangerRed;
   }
 
-  List<Color> _getRingGradient(double pct) {
-    if (pct >= 75) {
+  List<Color> _getRingGradient(double dust) {
+    if (dust <= 35.0) {
       return [AppColors.primaryGreen, AppColors.accentGreen];
-    } else if (pct >= 50) {
+    } else if (dust <= 55.0) {
       return [AppColors.moderateYellow, AppColors.accentGreen];
     } else {
       return [AppColors.dangerRed, AppColors.moderateYellow];
@@ -145,7 +145,7 @@ class _AirPurityRingState extends State<AirPurityRing>
                     size: Size(widget.size - 28, widget.size - 28),
                     painter: _WavePainter(
                       wavePhase: _waveController.value,
-                      fillPercentage: currentPct / 100,
+                      fillPercentage: min(1.0, currentPct / 150.0), // fill up to 150 ug/m3
                       color: _getStatusColor(currentPct),
                     ),
                   ),
@@ -156,7 +156,7 @@ class _AirPurityRingState extends State<AirPurityRing>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    '${currentPct.toStringAsFixed(0)}%',
+                    currentPct.toStringAsFixed(1),
                     style: Theme.of(context).textTheme.displayLarge?.copyWith(
                           color: Colors.white,
                           fontSize: 48,
@@ -171,7 +171,7 @@ class _AirPurityRingState extends State<AirPurityRing>
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'Pure',
+                    'μg/m³ Dust',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: Colors.white.withValues(alpha: 0.9),
                           fontWeight: FontWeight.w500,
@@ -217,8 +217,8 @@ class _RingPainter extends CustomPainter {
 
     canvas.drawCircle(center, radius - strokeWidth / 2, bgPaint);
 
-    // Gradient ring arc
-    final sweepAngle = (percentage / 100) * 2 * pi;
+    // Gradient ring arc (scale up to 150 ug/m3 for full circle)
+    final sweepAngle = min(1.0, percentage / 150.0) * 2 * pi;
     final rect = Rect.fromCircle(center: center, radius: radius - strokeWidth / 2);
 
     final gradientPaint = Paint()

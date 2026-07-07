@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
@@ -23,67 +22,6 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool _isSearching = false;
-  List<BleScanDevice> _scanDevices = const [];
-  String? _scanMessage;
-  StreamSubscription<bool>? _scanStateSubscription;
-  StreamSubscription<List<BleScanDevice>>? _scanDevicesSubscription;
-  StreamSubscription<String?>? _scanMessageSubscription;
-
-  @override
-  void initState() {
-    super.initState();
-    _isSearching = widget.bleService.isScanning;
-    _scanDevices = widget.bleService.scanDevices;
-
-    _scanStateSubscription = widget.bleService.scanStateStream.listen((state) {
-      if (mounted) {
-        setState(() => _isSearching = state);
-      }
-    });
-
-    _scanDevicesSubscription = widget.bleService.scanDevicesStream.listen((
-      devices,
-    ) {
-      if (mounted) {
-        setState(() => _scanDevices = devices);
-      }
-    });
-
-    _scanMessageSubscription = widget.bleService.scanMessageStream.listen((
-      message,
-    ) {
-      if (mounted) {
-        setState(() => _scanMessage = message);
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _scanStateSubscription?.cancel();
-    _scanDevicesSubscription?.cancel();
-    _scanMessageSubscription?.cancel();
-    super.dispose();
-  }
-
-  void _searchDevice() async {
-    if (_isSearching) return;
-    await widget.bleService.startScan();
-  }
-
-  void _stopSearch() async {
-    await widget.bleService.stopScan();
-  }
-
-  void _connectDevice(BleScanDevice device) async {
-    await widget.bleService.connectToScannedDevice(device);
-  }
-
-  void _disconnectDevice() async {
-    await widget.bleService.disconnect();
-  }
-
   Future<void> _updateBackgroundAlerts({
     bool? enabled,
     int? snoozeMinutes,
@@ -128,26 +66,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const SizedBox(height: 32),
               _SectionTitle(title: 'IoT Device Connectivity', icon: Icons.wifi),
               const SizedBox(height: 16),
-              StreamBuilder<bool>(
-                stream: widget.bleService.connectionStateStream,
-                initialData: widget.bleService.isConnected,
-                builder: (context, snapshot) {
-                  final isConnected = snapshot.data ?? false;
-                  return _DevicePanel(
-                    isSearching: _isSearching,
-                    deviceFound: isConnected,
-                    deviceName:
-                        widget.bleService.connectedDevice?.platformName ??
-                        'BreatheSafe_Device',
-                    scanDevices: _scanDevices,
-                    scanMessage: _scanMessage,
-                    onSearch: _searchDevice,
-                    onStopSearch: _stopSearch,
-                    onConnectDevice: _connectDevice,
-                    onDisconnect: _disconnectDevice,
-                  );
-                },
-              ),
+              _DevicePanel(bleService: widget.bleService),
               const SizedBox(height: 32),
               _SectionTitle(
                 title: 'Background Alerts',
@@ -256,37 +175,50 @@ class _ProfileCard extends StatelessWidget {
                 ),
               ],
             ),
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
-              child: Divider(),
-            ),
+            const Divider(height: 32),
             Text(
-              'Conditions',
+              'Health Conditions',
               style: GoogleFonts.inter(
                 fontSize: 14,
                 color: AppColors.textSecondary,
               ),
             ),
             const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: profile.conditions.map((c) {
-                return Chip(
-                  label: Text(c.label),
-                  avatar: Icon(c.icon, size: 16, color: AppColors.primaryGreen),
-                  backgroundColor: AppColors.primaryGreen.withValues(
-                    alpha: 0.1,
-                  ),
-                  labelStyle: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.primaryGreen,
-                  ),
-                  side: BorderSide.none,
-                );
-              }).toList(),
-            ),
+            if (profile.conditions.isEmpty)
+              Text(
+                'None selected',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontStyle: FontStyle.italic,
+                  color: AppColors.textTertiary,
+                ),
+              )
+            else
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children:
+                    profile.conditions.map((condition) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.cardSurface,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: AppColors.divider),
+                        ),
+                        child: Text(
+                          condition.label,
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+              ),
           ],
         ),
       ),
@@ -295,27 +227,9 @@ class _ProfileCard extends StatelessWidget {
 }
 
 class _DevicePanel extends StatelessWidget {
-  final bool isSearching;
-  final bool deviceFound;
-  final String deviceName;
-  final List<BleScanDevice> scanDevices;
-  final String? scanMessage;
-  final VoidCallback onSearch;
-  final VoidCallback onStopSearch;
-  final ValueChanged<BleScanDevice> onConnectDevice;
-  final VoidCallback onDisconnect;
+  final BleSensorService bleService;
 
-  const _DevicePanel({
-    required this.isSearching,
-    required this.deviceFound,
-    required this.deviceName,
-    required this.scanDevices,
-    required this.scanMessage,
-    required this.onSearch,
-    required this.onStopSearch,
-    required this.onConnectDevice,
-    required this.onDisconnect,
-  });
+  const _DevicePanel({required this.bleService});
 
   @override
   Widget build(BuildContext context) {
@@ -325,130 +239,213 @@ class _DevicePanel extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (scanMessage != null) ...[
-              _ScanMessage(message: scanMessage!),
-              const SizedBox(height: 16),
-            ],
-            if (!deviceFound && !isSearching) ...[
-              const Icon(
-                Icons.bluetooth_searching,
-                size: 48,
-                color: AppColors.textTertiary,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'No device connected',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.inter(
-                  fontSize: 16,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton.icon(
-                onPressed: onSearch,
-                icon: const Icon(Icons.search),
-                label: const Text('Search for BreatheSafe Device'),
-              ),
-              if (scanDevices.isNotEmpty) ...[
-                const SizedBox(height: 20),
-                _ScanResultList(
-                  devices: scanDevices,
-                  onConnectDevice: onConnectDevice,
-                ),
-              ],
-            ],
-            if (isSearching) ...[
-              const SizedBox(
-                height: 100,
-                child: Center(child: CircularProgressIndicator()),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Scanning for Bluetooth devices...',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextButton.icon(
-                onPressed: onStopSearch,
-                icon: const Icon(Icons.stop_circle_outlined, size: 18),
-                label: const Text('Stop Search'),
-              ),
-              if (scanDevices.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                _ScanResultList(
-                  devices: scanDevices,
-                  onConnectDevice: onConnectDevice,
-                ),
-              ],
-            ],
-            if (deviceFound && !isSearching) ...[
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.primaryGreen.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: AppColors.primaryGreen.withValues(alpha: 0.2),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryGreen.withValues(alpha: 0.1),
-                        shape: BoxShape.circle,
+            StreamBuilder<bool>(
+              stream: bleService.connectionStateStream,
+              initialData: bleService.isConnected,
+              builder: (context, connectionSnapshot) {
+                final isConnected = connectionSnapshot.data ?? false;
+                
+                if (isConnected) {
+                  return Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryGreen.withValues(alpha: 0.05),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: AppColors.primaryGreen.withValues(alpha: 0.2),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: AppColors.primaryGreen.withValues(alpha: 0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.bluetooth_connected,
+                                color: AppColors.primaryGreen,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    bleService.connectedDeviceName ?? 'BreatheSafe_Device',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.textPrimary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Connected to background service',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 12,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Icon(Icons.check_circle, color: AppColors.safeGreen),
+                          ],
+                        ),
                       ),
-                      child: const Icon(
-                        Icons.bluetooth_connected,
-                        color: AppColors.primaryGreen,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            deviceName.isNotEmpty
-                                ? deviceName
-                                : 'BreatheSafe_Device',
-                            style: GoogleFonts.inter(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary,
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          onPressed: () => bleService.disconnect(),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.dangerRed,
+                            side: const BorderSide(color: AppColors.dangerRed),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Connected',
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              color: AppColors.textSecondary,
+                          child: const Text('Disconnect'),
+                        ),
+                      ),
+                    ],
+                  );
+                }
+
+                return StreamBuilder<bool>(
+                  stream: bleService.scanStateStream,
+                  initialData: bleService.isScanning,
+                  builder: (context, scanStateSnapshot) {
+                    final isScanning = scanStateSnapshot.data ?? false;
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: isScanning
+                              ? () => bleService.stopScan()
+                              : () => bleService.startScan(),
+                          icon: isScanning
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(Icons.search),
+                          label: Text(isScanning ? 'Scanning...' : 'Search for Devices'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: isScanning ? AppColors.moderateYellow : AppColors.primaryGreen,
+                            foregroundColor: isScanning ? AppColors.textPrimary : Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                        ],
-                      ),
-                    ),
-                    const Icon(Icons.check_circle, color: AppColors.safeGreen),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextButton.icon(
-                onPressed: onDisconnect,
-                icon: const Icon(Icons.bluetooth_disabled, size: 18),
-                label: const Text('Disconnect'),
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.dangerRed,
-                ),
-              ),
-            ],
+                        ),
+                        const SizedBox(height: 16),
+                        StreamBuilder<List<BleScanDevice>>(
+                          stream: bleService.scanDevicesStream,
+                          initialData: bleService.scanDevices,
+                          builder: (context, scanSnapshot) {
+                            final devices = scanSnapshot.data ?? [];
+                            
+                            if (devices.isEmpty) {
+                              return Padding(
+                                padding: const EdgeInsets.all(24.0),
+                                child: Column(
+                                  children: [
+                                    const Icon(
+                                      Icons.bluetooth_searching,
+                                      size: 48,
+                                      color: AppColors.textTertiary,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      isScanning ? 'Searching...' : 'No devices found',
+                                      textAlign: TextAlign.center,
+                                      style: GoogleFonts.inter(
+                                        fontSize: 14,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
+
+                            return Container(
+                              constraints: const BoxConstraints(maxHeight: 250),
+                              decoration: BoxDecoration(
+                                color: AppColors.bgWhite,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: AppColors.divider),
+                              ),
+                              child: ListView.separated(
+                                shrinkWrap: true,
+                                itemCount: devices.length,
+                                separatorBuilder: (_, __) => const Divider(height: 1),
+                                itemBuilder: (context, index) {
+                                  final device = devices[index];
+                                  return ListTile(
+                                    leading: Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: device.isBreatheSafe
+                                            ? AppColors.primaryGreen.withValues(alpha: 0.1)
+                                            : AppColors.bgGray,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        Icons.bluetooth,
+                                        color: device.isBreatheSafe
+                                            ? AppColors.primaryGreen
+                                            : AppColors.textTertiary,
+                                      ),
+                                    ),
+                                    title: Text(
+                                      device.displayName,
+                                      style: GoogleFonts.inter(
+                                        fontWeight: device.isBreatheSafe
+                                            ? FontWeight.w600
+                                            : FontWeight.w400,
+                                        color: AppColors.textPrimary,
+                                      ),
+                                    ),
+                                    subtitle: Text(
+                                      'RSSI: ${device.rssi} dBm',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 12,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                    trailing: TextButton(
+                                      onPressed: () => bleService.connectToScannedDevice(device),
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: AppColors.primaryGreen,
+                                      ),
+                                      child: const Text('Connect'),
+                                    ),
+                                  );
+                                },
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    );
+                  },
+                );
+              }
+            ),
           ],
         ),
       ),
@@ -547,130 +544,6 @@ class _AlertSettingsCard extends StatelessWidget {
   }
 }
 
-class _ScanMessage extends StatelessWidget {
-  final String message;
-
-  const _ScanMessage({required this.message});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.moderateYellow.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: AppColors.moderateYellow.withValues(alpha: 0.35),
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(
-            Icons.info_outline,
-            color: AppColors.moderateYellow,
-            size: 18,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              message,
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                height: 1.4,
-                color: AppColors.textPrimary,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ScanResultList extends StatelessWidget {
-  final List<BleScanDevice> devices;
-  final ValueChanged<BleScanDevice> onConnectDevice;
-
-  const _ScanResultList({required this.devices, required this.onConnectDevice});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          'Available BLE devices',
-          style: GoogleFonts.inter(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        const SizedBox(height: 8),
-        ...devices.take(8).map((device) {
-          final color = device.isBreatheSafe
-              ? AppColors.primaryGreen
-              : AppColors.textTertiary;
-
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(10),
-              onTap: () => onConnectDevice(device),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: color.withValues(alpha: 0.2)),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.bluetooth, color: color, size: 20),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            device.displayName,
-                            style: GoogleFonts.inter(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${device.remoteId}  RSSI ${device.rssi}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              color: AppColors.textTertiary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (device.isBreatheSafe)
-                      const Icon(
-                        Icons.check_circle,
-                        color: AppColors.primaryGreen,
-                        size: 18,
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        }),
-      ],
-    );
-  }
-}
-
 class _AlarmTriggerGuideCard extends StatelessWidget {
   final UserProfile profile;
 
@@ -685,20 +558,20 @@ class _AlarmTriggerGuideCard extends StatelessWidget {
     final isSensitiveAge =
         profile.ageGroup == AgeGroup.child || profile.ageGroup == AgeGroup.senior;
 
-    String purityThreshold;
+    String dustThreshold;
     String? humidityThreshold;
     String profileReason;
 
     if (hasRespiratory) {
-      purityThreshold = 'Below 85%';
+      dustThreshold = 'Above 35 μg/m³';
       humidityThreshold = 'Above 65% or Below 35%';
       profileReason = 'Because you have respiratory conditions selected.';
     } else if (isSensitiveAge) {
-      purityThreshold = 'Below 80%';
+      dustThreshold = 'Above 35 μg/m³';
       humidityThreshold = 'Above 70% or Below 30%';
       profileReason = 'Because your age group is sensitive to poor air.';
     } else {
-      purityThreshold = 'Below 70%';
+      dustThreshold = 'Above 55 μg/m³';
       humidityThreshold = null;
       profileReason = 'Standard safe limits for healthy adults.';
     }
@@ -744,7 +617,7 @@ class _AlarmTriggerGuideCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildThresholdRow('Air Purity', purityThreshold, AppColors.primaryGreen),
+                  _buildThresholdRow('Dust Density', dustThreshold, AppColors.primaryGreen),
                   if (humidityThreshold != null) ...[
                     const Divider(height: 16),
                     _buildThresholdRow('Humidity', humidityThreshold, AppColors.humidityBlue),

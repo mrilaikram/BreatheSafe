@@ -7,7 +7,8 @@
 // --- PIN CONFIGURATION ---
 #define DHTPIN 4       // Digital pin connected to the DHT sensor
 #define DHTTYPE DHT22  // DHT 22 (AM2302)
-#define MQ135_PIN 34   // Analog pin connected to MQ135
+#define MEASURE_PIN 34 // Analog pin connected to Sharp GP2Y1010AU0F
+#define LED_POWER_PIN 2 // Digital pin to control Sharp GP2Y1010AU0F LED
 
 // --- BLE UUIDS ---
 // Custom Service UUID
@@ -25,7 +26,7 @@ bool oldDeviceConnected = false;
 // Variables to hold sensor readings
 float temperature = 0.0;
 float humidity = 0.0;
-float airPurity = 0.0;
+float dustDensity = 0.0;
 bool dhtValid = false;
 
 // --- BLE SERVER CALLBACKS ---
@@ -47,7 +48,8 @@ void setup() {
 
   // Initialize Sensors
   dht.begin();
-  pinMode(MQ135_PIN, INPUT);
+  pinMode(LED_POWER_PIN, OUTPUT);
+  pinMode(MEASURE_PIN, INPUT);
 
   // Initialize BLE
   BLEDevice::init("BreatheSafe_Device");
@@ -74,7 +76,7 @@ void setup() {
   BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
   pAdvertising->addServiceUUID(SERVICE_UUID);
   pAdvertising->setScanResponse(true);
-  pAdvertising->setMinPreferred(0x06);  // functions that help with iPhone connections issue
+  pAdvertising->setMinPreferred(0x06);
   pAdvertising->setMinPreferred(0x12);
   BLEDevice::startAdvertising();
   Serial.println("BLE Advertising started. Waiting for a client connection to notify...");
@@ -92,32 +94,37 @@ void loop() {
     temperature = t;
   }
 
-  // 2. MQ135 (Air Quality)
-  // The ESP32 ADC is 12-bit (0-4095). 
-  // For MQ135: Lower analog reading = clean air. Higher reading = more gas/smoke.
-  int mq135Raw = analogRead(MQ135_PIN);
+  // 2. Sharp GP2Y1010AU0F (Dust / Air Quality)
+  digitalWrite(LED_POWER_PIN, LOW); // Power on the LED
+  delayMicroseconds(280);
+  int voMeasured = analogRead(MEASURE_PIN); // Read the dust value (0-4095)
+  delayMicroseconds(40);
+  digitalWrite(LED_POWER_PIN, HIGH); // Turn the LED off
+  delayMicroseconds(9680);
+
+  // Convert raw 12-bit ADC to Voltage (ESP32 operates at 3.3V)
+  float calcVoltage = voMeasured * (3.3 / 4095.0);
+
+  // Linear equation to calculate dust density (mg/m3) -> convert to ug/m3
+  // mg/m3 = 0.17 * calcVoltage - 0.1
+  float dust_mg = (0.17 * calcVoltage) - 0.1;
+  dustDensity = dust_mg * 1000.0;
   
-  // Map the raw value to a percentage. 
-  // Assuming 0 is perfect air (100% purity) and 4095 is worst air (0% purity).
-  // Note: Calibration depends on the specific MQ135 environment and pre-heating.
-  airPurity = 100.0 - ((mq135Raw / 4095.0) * 100.0);
-  
-  // Clamp value between 0 and 100
-  if (airPurity > 100.0) airPurity = 100.0;
-  if (airPurity < 0.0) airPurity = 0.0;
+  if (dustDensity < 0.0) dustDensity = 0.0; // clamp to 0
 
   // Print to Serial for debugging
-  Serial.print("Raw MQ135: "); Serial.print(mq135Raw);
-  Serial.print(" | Purity: "); Serial.print(airPurity);
-  Serial.print("% | Hum: "); Serial.print(humidity);
+  Serial.print("Raw Dust ADC: "); Serial.print(voMeasured);
+  Serial.print(" | Voltage: "); Serial.print(calcVoltage);
+  Serial.print(" | Dust Density: "); Serial.print(dustDensity);
+  Serial.print(" ug/m3 | Hum: "); Serial.print(humidity);
   Serial.print("% | Temp: "); Serial.print(temperature);
   Serial.println(" C");
 
   // If connected, notify the client
   if (deviceConnected) {
-    // Format: "air_purity,humidity,temperature,mq135_raw,dht_valid"
+    // Format: "dustDensity,humidity,temperature,dhtValid"
     char payload[64];
-    snprintf(payload, sizeof(payload), "%.1f,%.1f,%.1f,%d,%d", airPurity, humidity, temperature, mq135Raw, dhtValid ? 1 : 0);
+    snprintf(payload, sizeof(payload), "%.1f,%.1f,%.1f,%d", dustDensity, humidity, temperature, dhtValid ? 1 : 0);
     
     pCharacteristic->setValue((uint8_t*)payload, strlen(payload));
     pCharacteristic->notify();
@@ -134,7 +141,6 @@ void loop() {
   }
   
   if (deviceConnected && !oldDeviceConnected) {
-      // do stuff here on connecting
       oldDeviceConnected = deviceConnected;
   }
 

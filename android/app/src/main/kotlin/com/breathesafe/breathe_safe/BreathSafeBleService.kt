@@ -47,6 +47,7 @@ class BreathSafeBleService : Service() {
 
     private var bluetoothGatt: BluetoothGatt? = null
     private var isScanning = false
+    private var isManualScan = false
     private var latestReading: Reading? = null
     private var mediaPlayer: MediaPlayer? = null
     private var audioManager: AudioManager? = null
@@ -56,14 +57,40 @@ class BreathSafeBleService : Service() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
             if (!isBreathSafeResult(result)) return
 
-            stopBleScan()
-            connectDevice(result.device)
+            if (isManualScan) {
+                val intent = Intent("com.breathesafe.ACTION_SCAN_RESULT")
+                val deviceName = try {
+                    if (hasBluetoothConnectPermission()) result.device.name ?: "" else ""
+                } catch (e: SecurityException) { "" }
+                
+                intent.putExtra("name", deviceName)
+                intent.putExtra("mac", result.device.address)
+                intent.putExtra("rssi", result.rssi)
+                sendBroadcast(intent)
+            } else {
+                stopBleScan()
+                connectDevice(result.device)
+            }
         }
 
         override fun onBatchScanResults(results: MutableList<ScanResult>) {
-            results.firstOrNull { isBreathSafeResult(it) }?.let {
-                stopBleScan()
-                connectDevice(it.device)
+            for (result in results) {
+                if (isBreathSafeResult(result)) {
+                    if (isManualScan) {
+                        val intent = Intent("com.breathesafe.ACTION_SCAN_RESULT")
+                        val deviceName = try {
+                            if (hasBluetoothConnectPermission()) result.device.name ?: "" else ""
+                        } catch (e: SecurityException) { "" }
+                        intent.putExtra("name", deviceName)
+                        intent.putExtra("mac", result.device.address)
+                        intent.putExtra("rssi", result.rssi)
+                        sendBroadcast(intent)
+                    } else {
+                        stopBleScan()
+                        connectDevice(result.device)
+                        break
+                    }
+                }
             }
         }
 
@@ -79,17 +106,26 @@ class BreathSafeBleService : Service() {
                 prefs().edit()
                     .putBoolean(PREF_IS_CONNECTED, true)
                     .putString(PREF_LAST_CONNECTED_MAC, gatt.device.address)
-                    .apply()
-                    
-                updateStatusNotification("Connected. Waiting for readings...")
+                prefs().edit().putString(PREF_LAST_CONNECTED_MAC, gatt.device.address).apply()
                 if (hasBluetoothConnectPermission()) {
                     gatt.discoverServices()
                 }
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                prefs().edit().putBoolean(PREF_IS_CONNECTED, false).apply()
                 closeGatt()
                 updateStatusNotification("Disconnected. Searching for BreatheSafe...")
                 scheduleScan(4_000)
+            }
+        }
+
+        private fun onConnectionStateChange(isConnected: Boolean) {
+            val prefs = prefs()
+            prefs.edit().putBoolean(PREF_IS_CONNECTED, isConnected).apply()
+
+            // Broadcast connection state to Flutter EventChannel
+            sendBroadcast(Intent("com.breathesafe.ACTION_CONNECTION_STATE").putExtra("connected", isConnected))
+
+            if (isConnected) {
+                updateStatusNotification("Connected. Monitoring air quality...")
             }
         }
 
@@ -139,7 +175,36 @@ class BreathSafeBleService : Service() {
                 snoozeAlerts()
                 return START_STICKY
             }
-            else -> startMonitoring()
+            ACTION_MANUAL_START_SCAN -> {
+                isManualScan = true
+                startBleScan()
+                return START_STICKY
+            }
+            ACTION_MANUAL_STOP_SCAN -> {
+                stopBleScan()
+                isManualScan = false
+                return START_STICKY
+            }
+            ACTION_MANUAL_CONNECT -> {
+                val mac = intent?.getStringExtra("mac")
+                if (mac != null) {
+                    stopBleScan()
+                    isManualScan = false
+                    val device = bluetoothAdapter?.getRemoteDevice(mac)
+                    if (device != null) {
+                        connectDevice(device)
+                    }
+                }
+                return START_STICKY
+            }
+            ACTION_MANUAL_DISCONNECT -> {
+                closeGatt()
+                return START_STICKY
+            }
+            else -> {
+                isManualScan = false
+                startMonitoring()
+            }
         }
 
         return START_STICKY
@@ -212,8 +277,12 @@ class BreathSafeBleService : Service() {
             mainHandler.postDelayed({
                 if (isScanning) {
                     stopBleScan()
-                    updateStatusNotification("Still searching for BreatheSafe...")
-                    scheduleScan(6_000)
+                    if (isManualScan) {
+                        isManualScan = false
+                    } else {
+                        updateStatusNotification("Still searching for BreatheSafe...")
+                        scheduleScan(6_000)
+                    }
                 }
             }, 12_000)
         } catch (error: SecurityException) {
@@ -289,12 +358,14 @@ class BreathSafeBleService : Service() {
         if (parts.size < 3) return
 
         val reading = Reading(
-            purity = parts[0].toDoubleOrNull() ?: return,
+            dustDensity = parts[0].toDoubleOrNull() ?: return,
             humidity = parts[1].toDoubleOrNull() ?: return,
             temperature = parts[2].toDoubleOrNull() ?: return,
-            mq135Raw = parts.getOrNull(3)?.toIntOrNull(),
-            dhtValid = parts.getOrNull(4)?.trim() != "0",
+            dhtValid = parts.getOrNull(3)?.trim() != "0",
         )
+
+        // Broadcast raw payload to Flutter EventChannel via MainActivity receiver
+        sendBroadcast(Intent("com.breathesafe.ACTION_SENSOR_DATA").putExtra("data", payload.trim()))
 
         latestReading = reading
         persistLatestReading(reading)
@@ -325,15 +396,15 @@ class BreathSafeBleService : Service() {
 
         val warning = when {
             hasRespiratoryCondition ->
-                reading.purity < 85.0 || reading.humidity > 65.0 || reading.humidity < 35.0
+                reading.dustDensity > 35.0 || reading.humidity > 65.0 || reading.humidity < 35.0
             sensitiveAge ->
-                reading.purity < 80.0 || reading.humidity > 70.0 || reading.humidity < 30.0
-            else -> reading.purity < 70.0
+                reading.dustDensity > 35.0 || reading.humidity > 70.0 || reading.humidity < 30.0
+            else -> reading.dustDensity > 55.0
         }
 
         if (!warning) return null
 
-        val title = if (reading.purity < 50.0) {
+        val title = if (reading.dustDensity > 150.0) {
             "Poor air quality"
         } else {
             "Warning condition"
@@ -342,7 +413,7 @@ class BreathSafeBleService : Service() {
         val message = when {
             reading.humidity > 70.0 -> "Humidity is high. Use ventilation or a dehumidifier."
             reading.humidity < 30.0 -> "Humidity is low. Dry air may irritate breathing."
-            reading.purity < 50.0 -> "Limit activity, close windows, and move to cleaner air."
+            reading.dustDensity > 150.0 -> "Limit activity, close windows, and move to cleaner air."
             else -> "Air quality is dropping. Reduce exposure until it improves."
         }
 
@@ -462,6 +533,8 @@ class BreathSafeBleService : Service() {
     }
 
     private fun closeGatt() {
+            // Tell flutter we are disconnected
+            sendBroadcast(Intent("com.breathesafe.ACTION_CONNECTION_STATE").putExtra("connected", false))
         try {
             bluetoothGatt?.close()
         } catch (_: Exception) {
@@ -527,18 +600,35 @@ class BreathSafeBleService : Service() {
     }
 
     private fun statusText(reading: Reading): String {
-        val purity = reading.purity.roundToInt()
-        val temp = String.format(Locale.US, "%.1f", reading.temperature)
-        val humidity = String.format(Locale.US, "%.1f", reading.humidity)
-        return "Purity $purity% | Temp ${temp}C | Humidity $humidity%"
+        return String.format(
+            Locale.US,
+            "Dust: %.1f ug/m3 | %.1f%% RH | %.1f°C",
+            reading.dustDensity,
+            reading.humidity,
+            reading.temperature,
+        )
+    }
+
+    private fun getPersistedReading(): Reading? {
+        return with(prefs()) {
+            val oldDust = getFloat(PREF_LAST_DUST_DENSITY, -1f).toDouble()
+            val oldHum = getFloat(PREF_LAST_HUMIDITY, -1f).toDouble()
+            val oldTemp = getFloat(PREF_LAST_TEMPERATURE, -1f).toDouble()
+            val oldValid = getBoolean(PREF_LAST_DHT_VALID, false)
+
+            if (oldDust >= 0) {
+                Reading(oldDust, oldHum, oldTemp, oldValid)
+            } else {
+                null
+            }
+        }
     }
 
     private fun persistLatestReading(reading: Reading) {
         prefs().edit()
-            .putFloat(PREF_LAST_PURITY, reading.purity.toFloat())
-            .putFloat(PREF_LAST_TEMPERATURE, reading.temperature.toFloat())
+            .putFloat(PREF_LAST_DUST_DENSITY, reading.dustDensity.toFloat())
             .putFloat(PREF_LAST_HUMIDITY, reading.humidity.toFloat())
-            .putInt(PREF_LAST_MQ135_RAW, reading.mq135Raw ?: -1)
+            .putFloat(PREF_LAST_TEMPERATURE, reading.temperature.toFloat())
             .putBoolean(PREF_LAST_DHT_VALID, reading.dhtValid)
             .apply()
     }
@@ -594,10 +684,9 @@ class BreathSafeBleService : Service() {
     private fun prefs() = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     private data class Reading(
-        val purity: Double,
+        val dustDensity: Double,
         val humidity: Double,
         val temperature: Double,
-        val mq135Raw: Int?,
         val dhtValid: Boolean,
     )
 
@@ -614,10 +703,9 @@ class BreathSafeBleService : Service() {
         const val PREF_CONDITIONS = "conditions"
         const val PREF_SNOOZE_UNTIL = "snooze_until"
         const val PREF_LAST_ALERT_AT = "last_alert_at"
-        const val PREF_LAST_PURITY = "last_purity"
+        const val PREF_LAST_DUST_DENSITY = "last_dust_density"
         const val PREF_LAST_TEMPERATURE = "last_temperature"
         const val PREF_LAST_HUMIDITY = "last_humidity"
-        const val PREF_LAST_MQ135_RAW = "last_mq135_raw"
         const val PREF_LAST_DHT_VALID = "last_dht_valid"
         const val PREF_IS_CONNECTED = "is_connected"
         const val PREF_LAST_CONNECTED_MAC = "last_connected_mac"
@@ -625,6 +713,11 @@ class BreathSafeBleService : Service() {
         const val ACTION_START = "com.breathesafe.breathe_safe.START_MONITOR"
         const val ACTION_STOP = "com.breathesafe.breathe_safe.STOP_MONITOR"
         const val ACTION_SNOOZE = "com.breathesafe.breathe_safe.SNOOZE_ALERTS"
+        
+        const val ACTION_MANUAL_START_SCAN = "com.breathesafe.breathe_safe.MANUAL_START_SCAN"
+        const val ACTION_MANUAL_STOP_SCAN = "com.breathesafe.breathe_safe.MANUAL_STOP_SCAN"
+        const val ACTION_MANUAL_CONNECT = "com.breathesafe.breathe_safe.MANUAL_CONNECT"
+        const val ACTION_MANUAL_DISCONNECT = "com.breathesafe.breathe_safe.MANUAL_DISCONNECT"
 
         const val EXTRA_ALERT_TITLE = "alert_title"
         const val EXTRA_ALERT_MESSAGE = "alert_message"

@@ -90,13 +90,12 @@ class _MainShellState extends State<_MainShell> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _bleSensorService.tryReconnectFromBackground();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _bleSensorService.tryReconnectFromBackground();
+      // Background service maintains connection automatically
     }
   }
 

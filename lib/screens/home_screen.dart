@@ -57,8 +57,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _handleScan() {
+    // The background service now handles all BLE connections automatically.
+    // We just show a quick toast or UI feedback if they tap it anyway.
     setState(() => _isScanning = true);
-    widget.bleService.refreshReading();
     Future.delayed(const Duration(milliseconds: 900), () {
       if (mounted) {
         setState(() => _isScanning = false);
@@ -74,54 +75,54 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         conditions.contains(RespiratoryCondition.dustAllergy);
   }
 
-  bool _isWarningCondition(double purity, double humidity) {
+  bool _isWarningCondition(double dust, double humidity) {
     final ageGroup = widget.profileService.profile.ageGroup;
     final sensitiveAge =
         ageGroup == AgeGroup.child || ageGroup == AgeGroup.senior;
 
     if (_hasRespiratoryCondition()) {
-      return purity < 85.0 || humidity > 65.0 || humidity < 35.0;
+      return dust > 35.0 || humidity > 65.0 || humidity < 35.0;
     }
 
     if (sensitiveAge) {
-      return purity < 80.0 || humidity > 70.0 || humidity < 30.0;
+      return dust > 35.0 || humidity > 70.0 || humidity < 30.0;
     }
 
-    return purity < 70.0;
+    return dust > 55.0;
   }
 
-  String _getPurityStatus(double pct, double humidity) {
-    if (_isWarningCondition(pct, humidity)) {
-      if (pct < 50.0) return 'Poor Air Quality';
+  String _getPurityStatus(double dust, double humidity) {
+    if (_isWarningCondition(dust, humidity)) {
+      if (dust > 150.0) return 'Poor Air Quality';
       return 'Warning Condition';
     }
     return 'Safe Air Quality';
   }
 
-  Color _getPurityColor(double pct, double humidity) {
-    if (_isWarningCondition(pct, humidity)) {
-      if (pct < 50.0) return AppColors.dangerRed;
+  Color _getPurityColor(double dust, double humidity) {
+    if (_isWarningCondition(dust, humidity)) {
+      if (dust > 150.0) return AppColors.dangerRed;
       return AppColors.moderateYellow;
     }
     return AppColors.primaryGreen;
   }
 
-  IconData _getPurityIcon(double pct, double humidity) {
-    if (_isWarningCondition(pct, humidity)) {
-      if (pct < 50.0) return Icons.dangerous_outlined;
+  IconData _getPurityIcon(double dust, double humidity) {
+    if (_isWarningCondition(dust, humidity)) {
+      if (dust > 150.0) return Icons.dangerous_outlined;
       return Icons.warning_amber_rounded;
     }
     return Icons.shield_outlined;
   }
 
-  String _getAqiLevel(double pct, double humidity) {
-    if (_isWarningCondition(pct, humidity)) {
-      return pct < 50.0 ? 'Unhealthy' : 'Moderate';
+  String _getAqiLevel(double dust, double humidity) {
+    if (_isWarningCondition(dust, humidity)) {
+      return dust > 150.0 ? 'Unhealthy' : 'Moderate';
     }
-    return pct >= 90 ? 'Excellent' : 'Good';
+    return dust <= 12.0 ? 'Excellent' : 'Good';
   }
 
-  String _getHealthTip(double pct, double humidity) {
+  String _getHealthTip(double dust, double humidity) {
     if (_hasRespiratoryCondition()) {
       if (humidity > 65.0) {
         return 'High humidity! Mold risk increased. Use a dehumidifier.';
@@ -129,21 +130,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       if (humidity < 35.0) {
         return 'Air is too dry. May irritate airways. Use a humidifier.';
       }
-      if (pct < 85.0) {
-        return 'Purity dropping. Keep inhaler nearby and limit exertion.';
+      if (dust > 35.0) {
+        return 'Dust levels rising. Keep inhaler nearby and limit exertion.';
       }
     }
 
     final ageGroup = widget.profileService.profile.ageGroup;
     if ((ageGroup == AgeGroup.child || ageGroup == AgeGroup.senior) &&
-        pct < 80.0) {
+        dust > 35.0) {
       return 'Sensitive age group detected. Reduce exposure until conditions improve.';
     }
 
-    if (pct < 50.0) {
+    if (dust > 150.0) {
       return 'Limit outdoor activity. Close windows and use air purifiers.';
     }
-    if (pct < 70.0) {
+    if (dust > 55.0) {
       return 'Sensitive individuals should reduce prolonged outdoor exertion.';
     }
     return 'Great conditions for outdoor activities. Enjoy your day!';
@@ -172,7 +173,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'No Sensor Connected',
+                      'Waiting for Background Connection',
                       style: GoogleFonts.inter(
                         color: AppColors.textSecondary,
                         fontSize: 16,
@@ -180,7 +181,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Go to Settings to pair BreatheSafe_Device',
+                      'Ensure BreatheSafe is powered on.',
                       style: GoogleFonts.inter(
                         color: AppColors.textTertiary,
                         fontSize: 12,
@@ -228,7 +229,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   const SizedBox(height: 24),
 
                   // ── Air Purity Ring ──
-                  AirPurityRing(percentage: _latestData!.airPurity),
+                  AirPurityRing(dustDensity: _latestData!.dustDensity),
 
                   const SizedBox(height: 24),
 
@@ -241,7 +242,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   ScanButton(onPressed: _handleScan, isScanning: _isScanning),
                   const SizedBox(height: 12),
                   Text(
-                    _isScanning ? 'Refreshing reading...' : 'Refresh Reading',
+                    _isScanning ? 'Syncing...' : 'Connected in Background',
                     style: GoogleFonts.inter(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
@@ -262,7 +263,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   const SizedBox(height: 28),
 
                   // ── Trend Chart ──
-                  _buildSectionTitle('Purity Trend', Icons.show_chart_rounded),
+                  _buildSectionTitle('Dust Trend', Icons.show_chart_rounded),
                   const SizedBox(height: 12),
                   _buildTrendCard(),
 
@@ -432,24 +433,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ),
                 decoration: BoxDecoration(
                   color: _getPurityColor(
-                    _latestData!.airPurity,
+                    _latestData!.dustDensity,
                     _latestData!.humidity,
                   ).withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
                     color: _getPurityColor(
-                      _latestData!.airPurity,
+                      _latestData!.dustDensity,
                       _latestData!.humidity,
                     ).withValues(alpha: 0.3),
                   ),
                 ),
                 child: Text(
-                  _getAqiLevel(_latestData!.airPurity, _latestData!.humidity),
+                  _getAqiLevel(_latestData!.dustDensity, _latestData!.humidity),
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
                     color: _getPurityColor(
-                      _latestData!.airPurity,
+                      _latestData!.dustDensity,
                       _latestData!.humidity,
                     ),
                   ),
@@ -464,9 +465,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   // ─────────── STATUS BADGE ───────────
   Widget _buildStatusBadge() {
-    final pct = _latestData!.airPurity;
+    final dust = _latestData!.dustDensity;
     final hum = _latestData!.humidity;
-    final color = _getPurityColor(pct, hum);
+    final color = _getPurityColor(dust, hum);
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 40),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -486,11 +487,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(_getPurityIcon(pct, hum), color: color, size: 20),
+          Icon(_getPurityIcon(dust, hum), color: color, size: 20),
           const SizedBox(width: 8),
           Flexible(
             child: Text(
-              _getPurityStatus(pct, hum),
+              _getPurityStatus(dust, hum),
               style: GoogleFonts.inter(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
@@ -586,7 +587,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           if (_latestData!.hasEstimatedComposition) ...[
             const SizedBox(height: 10),
             _buildTelemetryNote(
-              'Composition values are estimated from MQ135 purity.',
+              'Composition values are estimated from optical dust density.',
             ),
           ],
         ],
@@ -680,7 +681,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   // ─────────── TREND CARD ───────────
   Widget _buildTrendCard() {
-    final history = widget.bleService.purityHistory;
+    final history = widget.bleService.dustHistory;
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
       padding: const EdgeInsets.all(18),
@@ -703,7 +704,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Air Purity Index',
+                'Dust Density (μg/m³)',
                 style: GoogleFonts.inter(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
@@ -749,22 +750,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             children: [
               _buildTrendStat(
                 'Current',
-                '${_latestData!.airPurity.toStringAsFixed(1)}%',
-                _getPurityColor(_latestData!.airPurity, _latestData!.humidity),
+                _latestData!.dustDensity.toStringAsFixed(1),
+                _getPurityColor(_latestData!.dustDensity, _latestData!.humidity),
               ),
               _buildTrendStat(
                 'Peak',
                 history.isNotEmpty
-                    ? '${history.reduce((a, b) => a > b ? a : b).toStringAsFixed(1)}%'
+                    ? history.reduce((a, b) => a > b ? a : b).toStringAsFixed(1)
                     : '--',
-                AppColors.accentGreen,
+                AppColors.dangerRed, // Peak dust is bad
               ),
               _buildTrendStat(
                 'Low',
                 history.isNotEmpty
-                    ? '${history.reduce((a, b) => a < b ? a : b).toStringAsFixed(1)}%'
+                    ? history.reduce((a, b) => a < b ? a : b).toStringAsFixed(1)
                     : '--',
-                AppColors.moderateYellow,
+                AppColors.primaryGreen, // Low dust is good
               ),
             ],
           ),
@@ -795,9 +796,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   // ─────────── HEALTH TIP ───────────
   Widget _buildHealthTipCard() {
-    final pct = _latestData!.airPurity;
+    final dust = _latestData!.dustDensity;
     final hum = _latestData!.humidity;
-    final color = _getPurityColor(pct, hum);
+    final color = _getPurityColor(dust, hum);
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
       padding: const EdgeInsets.all(18),
@@ -840,7 +841,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  _getHealthTip(pct, hum),
+                  _getHealthTip(dust, hum),
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     color: AppColors.textSecondary,
