@@ -33,8 +33,6 @@ BreatheSafe is designed to pair with a custom BLE peripheral (ESP32) with two se
 
 ## 🔌 Wiring Diagram
 
-![BreatheSafe Wiring Diagram](wiring_diagram.png)
-
 > 📖 **Full connection guide with step-by-step instructions:** [HARDWARE_CONNECTIONS.md](HARDWARE_CONNECTIONS.md)
 
 **Quick summary:**
