@@ -1,7 +1,7 @@
 name: breathe_safe
 description: "BreatheSafe — Personalized Air Safety Monitor"
 publish_to: 'none'
-version: 1.2.3+3
+version: 1.2.4+4
 
 environment:
   sdk: ^3.10.3
