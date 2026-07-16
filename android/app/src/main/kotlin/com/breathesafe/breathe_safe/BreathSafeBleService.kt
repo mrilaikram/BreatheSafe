@@ -53,6 +53,10 @@ class BreathSafeBleService : Service() {
     private var audioManager: AudioManager? = null
     private var audioFocusRequest: AudioFocusRequest? = null
 
+    // Sustained-low air purity tracking for alert debounce
+    private var poorPuritySince: Long = 0L
+    private val POOR_PURITY_SUSTAIN_MS = 3_000L
+
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
             if (!isBreathSafeResult(result)) return
@@ -109,28 +113,26 @@ class BreathSafeBleService : Service() {
                 prefs().edit()
                     .putBoolean(PREF_IS_CONNECTED, true)
                     .putString(PREF_LAST_CONNECTED_MAC, gatt.device.address)
-                prefs().edit().putString(PREF_LAST_CONNECTED_MAC, gatt.device.address).apply()
+                    .apply()
+                // Broadcast connected state to Flutter UI
+                sendBroadcast(Intent("com.breathesafe.ACTION_CONNECTION_STATE").apply {
+                    setPackage(packageName)
+                    putExtra("connected", true)
+                })
+                updateStatusNotification("Connected. Monitoring air quality...")
                 if (hasBluetoothConnectPermission()) {
                     gatt.discoverServices()
                 }
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+                prefs().edit().putBoolean(PREF_IS_CONNECTED, false).apply()
+                // Broadcast disconnected state to Flutter UI
+                sendBroadcast(Intent("com.breathesafe.ACTION_CONNECTION_STATE").apply {
+                    setPackage(packageName)
+                    putExtra("connected", false)
+                })
                 closeGatt()
+                poorPuritySince = 0L
                 updateStatusNotification("Disconnected. Connect via Settings.")
-            }
-        }
-
-        private fun onConnectionStateChange(isConnected: Boolean) {
-            val prefs = prefs()
-            prefs.edit().putBoolean(PREF_IS_CONNECTED, isConnected).apply()
-
-            // Broadcast connection state to Flutter EventChannel
-            sendBroadcast(Intent("com.breathesafe.ACTION_CONNECTION_STATE").apply {
-                setPackage(packageName)
-                putExtra("connected", isConnected)
-            })
-
-            if (isConnected) {
-                updateStatusNotification("Connected. Monitoring air quality...")
             }
         }
 
@@ -366,13 +368,13 @@ class BreathSafeBleService : Service() {
         if (now < prefs.getLong(PREF_SNOOZE_UNTIL, 0L)) return
         if (now - prefs.getLong(PREF_LAST_ALERT_AT, 0L) < 60_000L) return
 
-        val alert = evaluateAlert(reading) ?: return
+        val alert = evaluateAlert(reading, now) ?: return
         prefs.edit().putLong(PREF_LAST_ALERT_AT, now).apply()
         notificationManager.notify(ALERT_NOTIFICATION_ID, buildAlertNotification(alert, reading))
         playLoopingAlarm()
     }
 
-    private fun evaluateAlert(reading: Reading): Alert? {
+    private fun evaluateAlert(reading: Reading, now: Long): Alert? {
         val prefs = prefs()
         val ageGroup = prefs.getString(PREF_AGE_GROUP, "adult")
         val conditions = prefs.getStringSet(PREF_CONDITIONS, emptySet()) ?: emptySet()
@@ -381,27 +383,49 @@ class BreathSafeBleService : Service() {
         }
         val sensitiveAge = ageGroup == "child" || ageGroup == "senior"
 
-        val warning = when {
-            hasRespiratoryCondition ->
-                reading.dustDensity > 35.0 || reading.humidity > 65.0 || reading.humidity < 35.0
-            sensitiveAge ->
-                reading.dustDensity > 35.0 || reading.humidity > 70.0 || reading.humidity < 30.0
-            else -> reading.dustDensity > 55.0
+        // Convert dust density to air purity percentage (0-100)
+        val airPurity = (100.0 - (reading.dustDensity / 150.0 * 100.0)).coerceIn(0.0, 100.0)
+
+        // Purity threshold per profile — only purity drives the primary trigger
+        val purityThreshold = when {
+            hasRespiratoryCondition -> 78.0  // Alert if purity < 78% for asthma/respiratory
+            sensitiveAge            -> 70.0  // Alert if purity < 70% for children/seniors
+            else                    -> 63.0  // Alert if purity < 63% for normal adults
         }
 
+        val poorPurity = airPurity < purityThreshold
+
+        // Require the purity to stay below threshold for 3 seconds (debounce sensor spikes)
+        if (poorPurity) {
+            if (poorPuritySince == 0L) poorPuritySince = now
+            if (now - poorPuritySince < POOR_PURITY_SUSTAIN_MS) return null
+        } else {
+            poorPuritySince = 0L  // Reset if reading recovers
+        }
+
+        // Humidity is a soft secondary trigger — only extreme values for non-respiratory users
+        // For respiratory conditions, humidity is ignored as a trigger (purity-only)
+        val humidityWarning = when {
+            hasRespiratoryCondition -> false  // Don't trigger on humidity for asthma patients
+            sensitiveAge -> reading.humidity > 85.0 || reading.humidity < 20.0
+            else         -> reading.humidity > 90.0 || reading.humidity < 15.0
+        }
+
+        val warning = poorPurity || humidityWarning
         if (!warning) return null
 
-        val title = if (reading.dustDensity > 150.0) {
-            "Poor air quality"
-        } else {
-            "Warning condition"
+        val title = when {
+            airPurity < 40.0 -> "Poor air quality"
+            humidityWarning  -> "Humidity warning"
+            else             -> "Air quality warning"
         }
 
         val message = when {
-            reading.humidity > 70.0 -> "Humidity is high. Use ventilation or a dehumidifier."
-            reading.humidity < 30.0 -> "Humidity is low. Dry air may irritate breathing."
-            reading.dustDensity > 150.0 -> "Limit activity, close windows, and move to cleaner air."
-            else -> "Air quality is dropping. Reduce exposure until it improves."
+            humidityWarning && reading.humidity > 85.0 -> "Very high humidity detected. Use ventilation."
+            humidityWarning && reading.humidity < 20.0 -> "Very low humidity detected. Use a humidifier."
+            airPurity < 40.0 -> "Air purity is very low (${airPurity.toInt()}%). Close windows and move to cleaner air."
+            hasRespiratoryCondition -> "Air purity at ${airPurity.toInt()}%. Reduce outdoor activity and stay indoors."
+            else -> "Air quality is dropping (${airPurity.toInt()}% purity). Reduce exposure."
         }
 
         return Alert(title, message)
