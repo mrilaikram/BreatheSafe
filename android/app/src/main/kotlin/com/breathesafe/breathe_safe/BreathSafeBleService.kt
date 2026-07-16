@@ -100,7 +100,6 @@ class BreathSafeBleService : Service() {
 
         override fun onScanFailed(errorCode: Int) {
             updateStatusNotification("Scan failed. Check Bluetooth and Location.")
-            scheduleScan(8_000)
         }
     }
 
@@ -116,8 +115,7 @@ class BreathSafeBleService : Service() {
                 }
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 closeGatt()
-                updateStatusNotification("Disconnected. Searching for BreatheSafe...")
-                scheduleScan(4_000)
+                updateStatusNotification("Disconnected. Connect via Settings.")
             }
         }
 
@@ -141,9 +139,8 @@ class BreathSafeBleService : Service() {
                 ?.getCharacteristic(CHARACTERISTIC_UUID)
 
             if (characteristic == null) {
-                updateStatusNotification("BreatheSafe service not found. Reconnecting...")
+                updateStatusNotification("BreatheSafe service not found.")
                 closeGatt()
-                scheduleScan(4_000)
                 return
             }
 
@@ -231,7 +228,7 @@ class BreathSafeBleService : Service() {
             return
         }
 
-        val notification = buildStatusNotification("Searching for BreatheSafe...")
+        val notification = buildStatusNotification("Ready. Connect via Settings.")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
                 STATUS_NOTIFICATION_ID,
@@ -241,19 +238,6 @@ class BreathSafeBleService : Service() {
         } else {
             startForeground(STATUS_NOTIFICATION_ID, notification)
         }
-
-        if (!hasBlePermissions()) {
-            updateStatusNotification("Allow Bluetooth and Location permissions.")
-            return
-        }
-
-        if (bluetoothAdapter?.isEnabled != true) {
-            updateStatusNotification("Turn on Bluetooth to monitor BreatheSafe.")
-            scheduleScan(10_000)
-            return
-        }
-
-        scheduleScan(500)
     }
 
     private fun startBleScan() {
@@ -261,14 +245,12 @@ class BreathSafeBleService : Service() {
 
         if (!hasBlePermissions() || bluetoothAdapter?.isEnabled != true) {
             updateStatusNotification("Turn on Bluetooth and Location.")
-            scheduleScan(10_000)
             return
         }
 
         val scanner = bluetoothAdapter?.bluetoothLeScanner
         if (scanner == null) {
             updateStatusNotification("BLE scanner unavailable.")
-            scheduleScan(10_000)
             return
         }
 
@@ -284,12 +266,7 @@ class BreathSafeBleService : Service() {
             mainHandler.postDelayed({
                 if (isScanning) {
                     stopBleScan()
-                    if (isManualScan) {
-                        isManualScan = false
-                    } else {
-                        updateStatusNotification("Still searching for BreatheSafe...")
-                        scheduleScan(6_000)
-                    }
+                    isManualScan = false
                 }
             }, 12_000)
         } catch (error: SecurityException) {
@@ -613,10 +590,11 @@ class BreathSafeBleService : Service() {
     }
 
     private fun statusText(reading: Reading): String {
+        val purity = maxOf(0.0, minOf(100.0, 100.0 - (reading.dustDensity / 150.0 * 100.0)))
         return String.format(
             Locale.US,
-            "Dust: %.1f ug/m3 | %.1f%% RH | %.1f°C",
-            reading.dustDensity,
+            "Air Purity: %.1f%% | %.1f%% RH | %.1f°C",
+            purity,
             reading.humidity,
             reading.temperature,
         )

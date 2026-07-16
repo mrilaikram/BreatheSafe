@@ -156,7 +156,7 @@ class _AirPurityRingState extends State<AirPurityRing>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    currentPct.toStringAsFixed(1),
+                    '${max(0.0, min(100.0, 100.0 - (widget.dustDensity / 150.0 * 100.0))).toStringAsFixed(1)}%',
                     style: Theme.of(context).textTheme.displayLarge?.copyWith(
                           color: Colors.white,
                           fontSize: 48,
@@ -171,7 +171,7 @@ class _AirPurityRingState extends State<AirPurityRing>
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'μg/m³ Dust',
+                    'Air Purity',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: Colors.white.withValues(alpha: 0.9),
                           fontWeight: FontWeight.w500,
