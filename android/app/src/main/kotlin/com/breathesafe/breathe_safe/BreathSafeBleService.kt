@@ -58,7 +58,9 @@ class BreathSafeBleService : Service() {
             if (!isBreathSafeResult(result)) return
 
             if (isManualScan) {
-                val intent = Intent("com.breathesafe.ACTION_SCAN_RESULT")
+                val intent = Intent("com.breathesafe.ACTION_SCAN_RESULT").apply {
+                    setPackage(packageName)
+                }
                 val deviceName = try {
                     if (hasBluetoothConnectPermission()) result.device.name ?: "" else ""
                 } catch (e: SecurityException) { "" }
@@ -77,7 +79,9 @@ class BreathSafeBleService : Service() {
             for (result in results) {
                 if (isBreathSafeResult(result)) {
                     if (isManualScan) {
-                        val intent = Intent("com.breathesafe.ACTION_SCAN_RESULT")
+                        val intent = Intent("com.breathesafe.ACTION_SCAN_RESULT").apply {
+                            setPackage(packageName)
+                        }
                         val deviceName = try {
                             if (hasBluetoothConnectPermission()) result.device.name ?: "" else ""
                         } catch (e: SecurityException) { "" }
@@ -122,7 +126,10 @@ class BreathSafeBleService : Service() {
             prefs.edit().putBoolean(PREF_IS_CONNECTED, isConnected).apply()
 
             // Broadcast connection state to Flutter EventChannel
-            sendBroadcast(Intent("com.breathesafe.ACTION_CONNECTION_STATE").putExtra("connected", isConnected))
+            sendBroadcast(Intent("com.breathesafe.ACTION_CONNECTION_STATE").apply {
+                setPackage(packageName)
+                putExtra("connected", isConnected)
+            })
 
             if (isConnected) {
                 updateStatusNotification("Connected. Monitoring air quality...")
@@ -365,7 +372,10 @@ class BreathSafeBleService : Service() {
         )
 
         // Broadcast raw payload to Flutter EventChannel via MainActivity receiver
-        sendBroadcast(Intent("com.breathesafe.ACTION_SENSOR_DATA").putExtra("data", payload.trim()))
+        sendBroadcast(Intent("com.breathesafe.ACTION_SENSOR_DATA").apply {
+            setPackage(packageName)
+            putExtra("data", payload.trim())
+        })
 
         latestReading = reading
         persistLatestReading(reading)
@@ -534,7 +544,10 @@ class BreathSafeBleService : Service() {
 
     private fun closeGatt() {
             // Tell flutter we are disconnected
-            sendBroadcast(Intent("com.breathesafe.ACTION_CONNECTION_STATE").putExtra("connected", false))
+            sendBroadcast(Intent("com.breathesafe.ACTION_CONNECTION_STATE").apply {
+                setPackage(packageName)
+                putExtra("connected", false)
+            })
         try {
             bluetoothGatt?.close()
         } catch (_: Exception) {

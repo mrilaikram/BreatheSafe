@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../theme/app_theme.dart';
 import '../services/background_alert_service.dart';
 import '../services/profile_service.dart';
@@ -35,6 +36,17 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _initializeApp() async {
+    try {
+      await [
+        Permission.bluetoothScan,
+        Permission.bluetoothConnect,
+        Permission.location,
+        Permission.notification,
+      ].request();
+    } catch (e) {
+      debugPrint('Error requesting permissions: $e');
+    }
+
     try {
       await widget.profileService.init();
       await BackgroundAlertService.configureFromProfile(widget.profileService);
